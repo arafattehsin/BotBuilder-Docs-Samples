@@ -16,8 +16,8 @@ namespace MiscBot
     public class BotAccessors
     {
         // The property accessor keys to use.
-        public const string UserInfoAccessorName = "HotelBot.UserInfo";
-        public const string DialogStateAccessorName = "HotelBot.DialogState";
+        public const string UserInfoAccessorName = "Misc.UserInfo";
+        public const string DialogStateAccessorName = "MiscBot.DialogState";
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BotAccessors"/> class.

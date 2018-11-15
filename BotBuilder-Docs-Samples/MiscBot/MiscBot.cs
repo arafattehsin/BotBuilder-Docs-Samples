@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MiscBot
 {
-    public class MiscBot
+    public class MiscBot : IBot
     {
         /// <summary>
         /// Represents a bot that processes incoming activities.
@@ -38,7 +38,7 @@ namespace MiscBot
         private readonly ILogger _logger;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="HotelBot"/> class.
+        /// Initializes a new instance of the <see cref="MiscBot"/> class.
         /// </summary>
         /// <param name="accessors">Contains the objects to use to manage state.</param>
         /// <param name="loggerFactory">A <see cref="ILoggerFactory"/> that is hooked to the Azure App Service provider.</param>
@@ -134,6 +134,61 @@ namespace MiscBot
 
             // Restart the main menu dialog.
             return await stepContext.ReplaceDialogAsync(MainDialogId, null, cancellationToken);
+        }
+
+        public async Task OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            if (turnContext.Activity.Type == ActivityTypes.Message)
+            {
+                // Establish dialog state from the conversation state.
+                DialogContext dc = await _dialogs.CreateContextAsync(turnContext, cancellationToken);
+
+                // Get the user's info.
+                UserInfo userInfo = await _accessors.UserInfoAccessor.GetAsync(turnContext, () => new UserInfo(), cancellationToken);
+
+                // Continue any current dialog.
+                DialogTurnResult dialogTurnResult = await dc.ContinueDialogAsync();
+
+                // Process the result of any complete dialog.
+                if (dialogTurnResult.Status is DialogTurnStatus.Complete)
+                {
+                    switch (dialogTurnResult.Result)
+                    {
+                        case GuestInfo guestInfo:
+                            // Store the results of the check-in dialog.
+                            userInfo.Guest = guestInfo;
+                            await _accessors.UserInfoAccessor.SetAsync(turnContext, userInfo, cancellationToken);
+                            break;
+                        default:
+                            // We shouldn't get here, since the main dialog is designed to loop.
+                            break;
+                    }
+                }
+
+                // Every dialog step sends a response, so if no response was sent,
+                // then no dialog is currently active.
+                else if (!turnContext.Responded)
+                {
+                    if (string.IsNullOrEmpty(userInfo.Guest?.Name))
+                    {
+                        // If we don't yet have the guest's info, start the check-in dialog.
+                        await dc.BeginDialogAsync(CheckInDialogId, null, cancellationToken);
+                    }
+                    else
+                    {
+                        // Otherwise, start our bot's main dialog.
+                        await dc.BeginDialogAsync(MainDialogId, null, cancellationToken);
+                    }
+                }
+
+                // Save the new turn count into the conversation state.
+                await _accessors.ConversationState.SaveChangesAsync(turnContext, false, cancellationToken);
+                await _accessors.UserState.SaveChangesAsync(turnContext, false, cancellationToken);
+            }
+            else
+            {
+                await turnContext.SendActivityAsync($"{turnContext.Activity.Type} event detected");
+            }
         }
     }
 }
